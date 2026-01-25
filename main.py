@@ -71,7 +71,7 @@ async def check_username(page, username, session):
 
     except Exception as e:
         taken_list.append(username)
-        await send_live_update(session, f"❌ ERROR: `{username}`")
+        await send_live_update(WEBHOOK_TAKEN, session, f"❌ ERROR/TAKEN: `{username}`")
 
     return "ok"
 
