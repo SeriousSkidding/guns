@@ -51,6 +51,7 @@ async def check_username(page, username, session):
 
         if response and response.status == 429 or any(x in content for x in RATE_LIMIT_TEXT):
             print("[RATE LIMITED] Sleeping...")
+            send_live_update("https://discord.com/api/webhooks/1465125153003405496/faRHjHg9JgElze49ZxjfW9QzZGwnVlaf0Ak7qC12nYuWmA95b64lsrJK71TMqlWGSIcB", session, f"UPDATES: Rate limited. Sleeping for: `{RATE_RETRY_DELAY}`")
             await asyncio.sleep(RATE_RETRY_DELAY)
             return "retry"
 
