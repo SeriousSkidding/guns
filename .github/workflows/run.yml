@@ -12,7 +12,7 @@ jobs:
     env:
       MODE: wordlist
       AMOUNT: 1000
-      WORDLIST_PATH: words.txt
+      WORDLIST: words.txt
 
       WEBHOOK_AVAILABLE: ${{ secrets.WEBHOOK_AVAILABLE }}
       WEBHOOK_TAKEN: ${{ secrets.WEBHOOK_TAKEN }}
