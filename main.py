@@ -26,8 +26,8 @@ USER_AGENT = (
 )
 
 # ---------------- LIVE WEBHOOK ---------------- #
-async def send_live_update(session, message):
-    if not WEBHOOK_AVAILABLE:
+async def send_live_update(webhook, session, message):
+    if not webhook:
         return
 
     payload = {
@@ -35,7 +35,7 @@ async def send_live_update(session, message):
         "allowed_mentions": {"parse": []}
     }
 
-    async with session.post(WEBHOOK_AVAILABLE, json=payload) as r:
+    async with session.post(webhook, json=payload) as r:
         print(f"[LIVE] {message} ({r.status})")
 
 # ---------------- CHECK FUNCTION ---------------- #
@@ -59,19 +59,19 @@ async def check_username(page, username, session):
 
         if "username not found" in text:
             available_list.append(username)
-            await send_live_update(session, f"✅ AVAILABLE: `{username}`")
+            await send_live_update(WEBHOOK_AVAILABLE, session, f"✅ AVAILABLE: `{username}`")
 
         elif "has been banned" in text:
             banned_list.append(username)
-            await send_live_update(session, f"⚠️ BANNED: `{username}`")
+            await send_live_update(WEBHOOK_BANNED, session, f"⚠️ BANNED: `{username}`")
 
         else:
             taken_list.append(username)
-            await send_live_update(session, f"❌ TAKEN: `{username}`")
+            await send_live_update(WEBHOOK_TAKEN, session, f"❌ TAKEN: `{username}`")
 
     except Exception as e:
         taken_list.append(username)
-        await send_live_update(session, f"❌ ERROR/TOKEN: `{username}`")
+        await send_live_update(session, f"❌ ERROR: `{username}`")
 
     return "ok"
 
