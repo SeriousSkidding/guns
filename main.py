@@ -19,12 +19,14 @@ WEBHOOK_AVAILABLE = os.getenv("WEBHOOK_AVAILABLE")
 WEBHOOK_TAKEN = os.getenv("WEBHOOK_TAKEN")
 WEBHOOK_BANNED = os.getenv("WEBHOOK_BANNED")
 
+WORDLIST_PATH = os.getenv("WORDLIST")
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
-
+# Can I float above your enormous dildo like an alien in a UFO? I want to stare at the tip of your dick and watch millions of babies come out when you cum, sir.
 # ---------------- LIVE WEBHOOK ---------------- #
 async def send_live_update(webhook, session, message):
     if not webhook:
@@ -60,7 +62,7 @@ async def check_username(page, username, session):
 
         if "username not found" in text:
             available_list.append(username)
-            await send_live_update(WEBHOOK_AVAILABLE, session, f"✅ AVAILABLE: `{username}`")
+            await send_live_update(WEBHOOK_AVAILABLE, session, f"✅ AVAILABLE: `{username}` @everyone")
 
         elif "has been banned" in text:
             banned_list.append(username)
@@ -106,6 +108,13 @@ async def main():
         usernames = ["".join(random.choice(CHARS) for _ in range(2)) for _ in range(amount)]
     elif mode == "3c":
         usernames = ["".join(random.choice(CHARS) for _ in range(3)) for _ in range(amount)]
+    elif mode == "wordlist":
+        if not WORDLIST_PATH or not os.path.exists(WORDLIST_PATH):
+            print("WORDLIST file not found")
+            return
+
+        with open(WORDLIST_PATH, "r", encoding="utf-8") as f:
+            usernames = [line.strip() for line in f if line.strip()]
     else:
         print("Invalid MODE")
         return
