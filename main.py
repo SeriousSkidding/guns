@@ -46,7 +46,7 @@ async def check_username(page, username, session):
             wait_until="domcontentloaded"
         )
 
-        await page.wait_for_timeout(300)
+        await page.wait_for_timeout(500)
         content = (await page.content()).lower()
 
         # ---- RATE LIMIT ----
@@ -59,14 +59,14 @@ async def check_username(page, username, session):
             await asyncio.sleep(RATE_RETRY_DELAY)
             return
 
-        # ---- AVAILABLE ----
-        if "username not found" in content:
-            available_list.append(username)
-            await send_live(
-                WEBHOOK_AVAILABLE,
-                session,
-                f"✅ AVAILABLE: `{username}` | @everyone"
-            )
+        # ---- CLOUDFLARE / FAKE PAGE ----
+        if (
+            "checking your browser" in content
+            or "cf-browser-verification" in content
+            or "<title></title>" in content
+        ):
+            # Treat as retry, not available
+            await asyncio.sleep(2)
             return
 
         # ---- BANNED ----
@@ -79,11 +79,22 @@ async def check_username(page, username, session):
             )
             return
 
-        # ---- TAKEN (default) ----
+        # ---- AVAILABLE ----
+        if "username not found" in content:
+            available_list.append(username)
+            await send_live(
+                WEBHOOK_AVAILABLE,
+                session,
+                f"✅ AVAILABLE: `{username}` | @everyone"
+            )
+            return
+
+        # ---- TAKEN ----
         taken_list.append(username)
 
     except Exception:
         taken_list.append(username)
+
 
 # -------- WORKER -------- #
 async def worker(name, queue, page, session):
