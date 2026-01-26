@@ -13,6 +13,7 @@ jobs:
       MODE: 2c
       AMOUNT: 5000
       WORDLIST: words.txt
+      PAGES: 3
 
       WEBHOOK_AVAILABLE: ${{ secrets.WEBHOOK_AVAILABLE }}
       WEBHOOK_TAKEN: ${{ secrets.WEBHOOK_TAKEN }}
