@@ -7,20 +7,18 @@ from playwright.async_api import async_playwright
 
 BASE_URL = "https://guns.lol/{}"
 
-available_list = []
-banned_list = []
-taken_list = []
-
 CHARS = string.ascii_lowercase + string.digits
 RATE_RETRY_DELAY = 120
 
-# ---------------- WEBHOOKS ---------------- #
+# -------- ENV -------- #
 WEBHOOK_AVAILABLE = os.getenv("WEBHOOK_AVAILABLE")
 WEBHOOK_TAKEN = os.getenv("WEBHOOK_TAKEN")
 WEBHOOK_BANNED = os.getenv("WEBHOOK_BANNED")
 WEBHOOK_RATE = os.getenv("WEBHOOK_RATE")
 
-WORDLIST_PATH = os.getenv("WORDLIST")
+MODE = os.getenv("MODE", "2c")
+AMOUNT = int(os.getenv("AMOUNT", "50"))
+CONCURRENCY = int(os.getenv("PAGES", "3"))
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -28,95 +26,82 @@ USER_AGENT = (
     "Chrome/120.0.0.0 Safari/537.36"
 )
 
-# ---------------- LIVE WEBHOOK ---------------- #
-async def send_live_update(webhook, session, message):
+available_list = []
+banned_list = []
+taken_list = []
+
+# -------- WEBHOOK -------- #
+async def send_live(webhook, session, msg):
     if not webhook:
         return
+    payload = {"content": msg, "allowed_mentions": {"parse": []}}
+    await session.post(webhook, json=payload)
 
-    payload = {
-        "content": message,
-        "allowed_mentions": {"parse": []}
-    }
-
-    async with session.post(webhook, json=payload) as r:
-        print(f"[LIVE] {message} ({r.status})")
-
-# ---------------- CHECK FUNCTION ---------------- #
+# -------- CHECK -------- #
 async def check_username(page, username, session):
     try:
         await page.goto(
             BASE_URL.format(username),
-            timeout=30000,
-            wait_until="networkidle"
+            timeout=20000,
+            wait_until="domcontentloaded"
         )
 
-        await page.wait_for_timeout(1000)
+        await page.wait_for_timeout(300)
         content = (await page.content()).lower()
 
-        # -------- RATE LIMIT --------
+        # ---- RATE LIMIT ----
         if "too many requests" in content:
-            print("[RATE LIMITED] Sleeping...")
-            await send_live_update(
+            await send_live(
                 WEBHOOK_RATE,
                 session,
                 f"⏳ RATE LIMITED — sleeping {RATE_RETRY_DELAY}s"
             )
             await asyncio.sleep(RATE_RETRY_DELAY)
-            return "retry"
+            return
 
-        # -------- BANNED FIRST --------
+        # ---- BANNED FIRST ----
         if "has been banned" in content:
             banned_list.append(username)
-            await send_live_update(
+            await send_live(
                 WEBHOOK_BANNED,
                 session,
                 f"⚠️ BANNED: `{username}`"
             )
+            return
 
-        # -------- AVAILABLE --------
-        elif "username not found" in content:
+        # ---- AVAILABLE ----
+        if "username not found" in content:
             available_list.append(username)
-            await send_live_update(
+            await send_live(
                 WEBHOOK_AVAILABLE,
                 session,
-                f"✅ AVAILABLE: `{username}`"
+                f"✅ AVAILABLE: `{username}` | @everyone"
             )
+            return
 
-        # -------- TAKEN --------
-        elif (
-            "followers" in content
-            or "following" in content
-            or "views" in content
-        ):
+        # ---- TAKEN (NO LIVE WEBHOOK) ----
+        if "followers" in content or "following" in content:
             taken_list.append(username)
-            await send_live_update(
-                WEBHOOK_TAKEN,
-                session,
-                f"❌ TAKEN: `{username}`"
-            )
+            return
 
-        # -------- UNKNOWN --------
-        else:
-            print(f"[UNKNOWN] {username} — retrying")
-            await asyncio.sleep(3)
-            return "retry"
+        # ---- UNKNOWN ----
+        await asyncio.sleep(1)
 
-    except Exception as e:
-        print(f"[ERROR] {username} — {e}")
+    except Exception:
         taken_list.append(username)
-        await send_live_update(
-            WEBHOOK_TAKEN,
-            session,
-            f"❌ ERROR/TREATED AS TAKEN: `{username}`"
-        )
 
-    return "ok"
+# -------- WORKER -------- #
+async def worker(name, queue, page, session):
+    while not queue.empty():
+        username = await queue.get()
+        await check_username(page, username, session)
+        await asyncio.sleep(0.25)
+        queue.task_done()
 
-# ---------------- SUMMARY WEBHOOK ---------------- #
+# -------- SUMMARY -------- #
 async def send_summary(url, title, names, color):
     if not url:
         return
-
     if not names:
         names = ["None"]
 
@@ -129,29 +114,22 @@ async def send_summary(url, title, names, color):
         "allowed_mentions": {"parse": []}
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload) as r:
-            print(f"{title} summary webhook: {r.status}")
+    async with aiohttp.ClientSession() as s:
+        await s.post(url, json=payload)
 
-# ---------------- MAIN ---------------- #
+# -------- MAIN -------- #
 async def main():
-    mode = os.getenv("MODE", "2c")
-    amount = int(os.getenv("AMOUNT", "50"))
-
-    if mode == "2c":
-        usernames = ["".join(random.choice(CHARS) for _ in range(2)) for _ in range(amount)]
-    elif mode == "3c":
-        usernames = ["".join(random.choice(CHARS) for _ in range(3)) for _ in range(amount)]
-    elif mode == "wordlist":
-        if not WORDLIST_PATH or not os.path.exists(WORDLIST_PATH):
-            print("WORDLIST file not found")
-            return
-
-        with open(WORDLIST_PATH, "r", encoding="utf-8") as f:
-            usernames = [line.strip() for line in f if line.strip()]
+    if MODE == "2c":
+        usernames = ["".join(random.choice(CHARS) for _ in range(2)) for _ in range(AMOUNT)]
+    elif MODE == "3c":
+        usernames = ["".join(random.choice(CHARS) for _ in range(3)) for _ in range(AMOUNT)]
     else:
         print("Invalid MODE")
         return
+
+    queue = asyncio.Queue()
+    for u in usernames:
+        queue.put_nowait(u)
 
     async with aiohttp.ClientSession() as session:
         async with async_playwright() as p:
@@ -160,15 +138,24 @@ async def main():
                 args=["--no-sandbox", "--disable-dev-shm-usage"]
             )
 
-            page = await browser.new_page(user_agent=USER_AGENT)
+            pages = [
+                await browser.new_page(user_agent=USER_AGENT)
+                for _ in range(CONCURRENCY)
+            ]
 
-            for user in usernames:
-                await check_username(page, user, session)
-                await asyncio.sleep(1)
+            workers = [
+                asyncio.create_task(worker(f"W{i}", queue, pages[i], session))
+                for i in range(CONCURRENCY)
+            ]
+
+            await queue.join()
+
+            for w in workers:
+                w.cancel()
 
             await browser.close()
 
-    # -------- FINAL SUMMARIES --------
+    # ---- FINAL SUMMARIES ----
     await send_summary(WEBHOOK_AVAILABLE, "✅ Available Names", available_list, 0x57F287)
     await send_summary(WEBHOOK_TAKEN, "❌ Taken Names", taken_list, 0xED4245)
     await send_summary(WEBHOOK_BANNED, "⚠️ Banned Names", banned_list, 0xFEE75C)
