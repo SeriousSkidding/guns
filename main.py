@@ -47,7 +47,9 @@ async def check_username(page, username, session):
         )
 
         await page.wait_for_timeout(500)
-        content = (await page.content()).lower()
+
+        # 🔑 READ VISIBLE TEXT ONLY
+        content = (await page.inner_text("body")).lower()
 
         # ---- RATE LIMIT ----
         if "too many requests" in content:
@@ -59,14 +61,14 @@ async def check_username(page, username, session):
             await asyncio.sleep(RATE_RETRY_DELAY)
             return
 
-        # ---- CLOUDFLARE / FAKE PAGE ----
-        if (
-            "checking your browser" in content
-            or "cf-browser-verification" in content
-            or "<title></title>" in content
-        ):
-            # Treat as retry, not available
-            await asyncio.sleep(2)
+        # ---- AVAILABLE ----
+        if "username not found" in content:
+            available_list.append(username)
+            await send_live(
+                WEBHOOK_AVAILABLE,
+                session,
+                f"✅ AVAILABLE: `{username}` | @everyone"
+            )
             return
 
         # ---- BANNED ----
@@ -76,16 +78,6 @@ async def check_username(page, username, session):
                 WEBHOOK_BANNED,
                 session,
                 f"⚠️ BANNED: `{username}`"
-            )
-            return
-
-        # ---- AVAILABLE ----
-        if "username not found" in content:
-            available_list.append(username)
-            await send_live(
-                WEBHOOK_AVAILABLE,
-                session,
-                f"✅ AVAILABLE: `{username}` | @everyone"
             )
             return
 
