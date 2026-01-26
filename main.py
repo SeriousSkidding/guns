@@ -46,13 +46,11 @@ async def check_username(page, username, session):
             wait_until="domcontentloaded"
         )
 
-        await page.wait_for_timeout(500)
+        await page.wait_for_timeout(300)
 
-        # 🔑 READ VISIBLE TEXT ONLY
-        content = (await page.inner_text("body")).lower()
-
-        # ---- RATE LIMIT ----
-        if "too many requests" in content:
+        # ---- RATE LIMIT (still body-based) ----
+        body_text = (await page.inner_text("body")).lower()
+        if "too many requests" in body_text:
             await send_live(
                 WEBHOOK_RATE,
                 session,
@@ -61,8 +59,14 @@ async def check_username(page, username, session):
             await asyncio.sleep(RATE_RETRY_DELAY)
             return
 
+        # ---- READ STATUS FROM H1 ONLY ----
+        try:
+            h1_text = (await page.locator("h1").first.inner_text()).strip().lower()
+        except:
+            h1_text = ""
+
         # ---- AVAILABLE ----
-        if "username not found" in content:
+        if h1_text == "username not found":
             available_list.append(username)
             await send_live(
                 WEBHOOK_AVAILABLE,
@@ -72,7 +76,7 @@ async def check_username(page, username, session):
             return
 
         # ---- BANNED ----
-        if "this user has been banned" in content:
+        if h1_text == "this user has been banned":
             banned_list.append(username)
             await send_live(
                 WEBHOOK_BANNED,
@@ -81,7 +85,7 @@ async def check_username(page, username, session):
             )
             return
 
-        # ---- TAKEN ----
+        # ---- TAKEN (default) ----
         taken_list.append(username)
 
     except Exception:
