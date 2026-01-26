@@ -59,16 +59,6 @@ async def check_username(page, username, session):
             await asyncio.sleep(RATE_RETRY_DELAY)
             return
 
-        # ---- BANNED FIRST ----
-        if "has been banned" in content:
-            banned_list.append(username)
-            await send_live(
-                WEBHOOK_BANNED,
-                session,
-                f"⚠️ BANNED: `{username}`"
-            )
-            return
-
         # ---- AVAILABLE ----
         if "username not found" in content:
             available_list.append(username)
@@ -79,13 +69,18 @@ async def check_username(page, username, session):
             )
             return
 
-        # ---- TAKEN (NO LIVE WEBHOOK) ----
-        if "followers" in content or "following" in content:
-            taken_list.append(username)
+        # ---- BANNED ----
+        if "this user has been banned" in content:
+            banned_list.append(username)
+            await send_live(
+                WEBHOOK_BANNED,
+                session,
+                f"⚠️ BANNED: `{username}`"
+            )
             return
 
-        # ---- UNKNOWN ----
-        await asyncio.sleep(1)
+        # ---- TAKEN (default) ----
+        taken_list.append(username)
 
     except Exception:
         taken_list.append(username)
