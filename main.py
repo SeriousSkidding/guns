@@ -12,12 +12,13 @@ banned_list = []
 taken_list = []
 
 CHARS = string.ascii_lowercase + string.digits
-RATE_LIMIT_TEXT = ["too many requests"]
 RATE_RETRY_DELAY = 120
 
+# ---------------- WEBHOOKS ---------------- #
 WEBHOOK_AVAILABLE = os.getenv("WEBHOOK_AVAILABLE")
 WEBHOOK_TAKEN = os.getenv("WEBHOOK_TAKEN")
 WEBHOOK_BANNED = os.getenv("WEBHOOK_BANNED")
+WEBHOOK_RATE = os.getenv("WEBHOOK_RATE")
 
 WORDLIST_PATH = os.getenv("WORDLIST")
 
@@ -26,7 +27,7 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
-# Can I float above your enormous dildo like an alien in a UFO? I want to stare at the tip of your dick and watch millions of babies come out when you cum, sir.
+
 # ---------------- LIVE WEBHOOK ---------------- #
 async def send_live_update(webhook, session, message):
     if not webhook:
@@ -49,32 +50,22 @@ async def check_username(page, username, session):
             wait_until="networkidle"
         )
 
-        # Give JS / Cloudflare a moment
         await page.wait_for_timeout(1000)
-
         content = (await page.content()).lower()
 
-        # ---- Rate limit detection (FIXED precedence + await) ----
+        # -------- RATE LIMIT --------
         if "too many requests" in content:
             print("[RATE LIMITED] Sleeping...")
             await send_live_update(
-                "https://discord.com/api/webhooks/1465125153003405496/faRHjHg9JgElze49ZxjfW9QzZGwnVlaf0Ak7qC12nYuWmA95b64lsrJK71TMqlWGSIcB",
+                WEBHOOK_RATE,
                 session,
                 f"⏳ RATE LIMITED — sleeping {RATE_RETRY_DELAY}s"
             )
             await asyncio.sleep(RATE_RETRY_DELAY)
             return "retry"
 
-        # ---- Reliable detection (NO h1-only logic) ----
-        if "username not found" in content:
-            available_list.append(username)
-            await send_live_update(
-                WEBHOOK_AVAILABLE,
-                session,
-                f"✅ AVAILABLE: `{username}` | @everyone"
-            )
-
-        elif "has been banned" in content:
+        # -------- BANNED FIRST --------
+        if "has been banned" in content:
             banned_list.append(username)
             await send_live_update(
                 WEBHOOK_BANNED,
@@ -82,7 +73,21 @@ async def check_username(page, username, session):
                 f"⚠️ BANNED: `{username}`"
             )
 
-        elif "profile" in content or "followers" in content or "guns.lol/" in content:
+        # -------- AVAILABLE --------
+        elif "username not found" in content:
+            available_list.append(username)
+            await send_live_update(
+                WEBHOOK_AVAILABLE,
+                session,
+                f"✅ AVAILABLE: `{username}`"
+            )
+
+        # -------- TAKEN --------
+        elif (
+            "followers" in content
+            or "following" in content
+            or "views" in content
+        ):
             taken_list.append(username)
             await send_live_update(
                 WEBHOOK_TAKEN,
@@ -90,13 +95,14 @@ async def check_username(page, username, session):
                 f"❌ TAKEN: `{username}`"
             )
 
+        # -------- UNKNOWN --------
         else:
-            # Unknown / partial page — retry once later instead of mislabeling
-            print(f"[UNKNOWN] {username} — retrying later")
+            print(f"[UNKNOWN] {username} — retrying")
             await asyncio.sleep(3)
             return "retry"
 
     except Exception as e:
+        print(f"[ERROR] {username} — {e}")
         taken_list.append(username)
         await send_live_update(
             WEBHOOK_TAKEN,
@@ -105,6 +111,7 @@ async def check_username(page, username, session):
         )
 
     return "ok"
+
 # ---------------- SUMMARY WEBHOOK ---------------- #
 async def send_summary(url, title, names, color):
     if not url:
@@ -157,11 +164,11 @@ async def main():
 
             for user in usernames:
                 await check_username(page, user, session)
-                await asyncio.sleep(1)  # small delay to avoid Discord spam limits
+                await asyncio.sleep(1)
 
             await browser.close()
 
-    # Final summaries
+    # -------- FINAL SUMMARIES --------
     await send_summary(WEBHOOK_AVAILABLE, "✅ Available Names", available_list, 0x57F287)
     await send_summary(WEBHOOK_TAKEN, "❌ Taken Names", taken_list, 0xED4245)
     await send_summary(WEBHOOK_BANNED, "⚠️ Banned Names", banned_list, 0xFEE75C)
