@@ -2452,7 +2452,7 @@ icespice
 latto
 flomilli
 sofaygo
-destroy lonely
+destroylonely
 kencarson
 homixidegang
 babykeem
@@ -2462,13 +2462,13 @@ tyga
 meekmill
 rickross
 schoolboyq
-ab-soul
+absoul
 isaiahrashad
-vince staples
+vincestaples
 earlsweatshirt
 actionbronson
 logic
-g-eazy
+geazy
 wizkhalifa
 currensy
 berner
