@@ -1,9 +1,9 @@
-name: guns.lol username checker
+name: sniper.lol word checker
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/10 * * * *"
 
 jobs:
   run:
