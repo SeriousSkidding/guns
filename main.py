@@ -16,7 +16,7 @@ WEBHOOK_TAKEN = os.getenv("WEBHOOK_TAKEN")
 WEBHOOK_BANNED = os.getenv("WEBHOOK_BANNED")
 WEBHOOK_RATE = os.getenv("WEBHOOK_RATE")
 
-MODE = os.getenv("MODE", "2c")
+MODE = os.getenv("MODE", "word")
 AMOUNT = int(os.getenv("AMOUNT", "50"))
 CONCURRENCY = int(os.getenv("PAGES", "3"))
 
@@ -122,12 +122,32 @@ async def send_summary(url, title, names, color):
 # -------- MAIN -------- #
 async def main():
     if MODE == "2c":
-        usernames = ["".join(random.choice(CHARS) for _ in range(2)) for _ in range(AMOUNT)]
+        usernames = [
+            "".join(random.choice(CHARS) for _ in range(2))
+            for _ in range(AMOUNT)
+        ]
+
     elif MODE == "3c":
-        usernames = ["".join(random.choice(CHARS) for _ in range(3)) for _ in range(AMOUNT)]
-    else:
-        print("Invalid MODE")
-        return
+        usernames = [
+            "".join(random.choice(CHARS) for _ in range(3))
+            for _ in range(AMOUNT)
+        ]
+
+    elif MODE == "wordlist":
+        wordlist_path = os.getenv("WORDLIST")
+        if not wordlist_path or not os.path.exists(wordlist_path):
+            print("WORDLIST file not found")
+            return
+
+        with open(wordlist_path, "r", encoding="utf-8") as f:
+            usernames = [
+                line.strip()
+                for line in f
+                if line.strip()
+            ]
+        else:
+            print("Invalid MODE")
+            return
 
     queue = asyncio.Queue()
     for u in usernames:
