@@ -146,9 +146,9 @@ async def main():
                 for line in f
                 if line.strip()
             ]
-        else:
-            print("Invalid MODE")
-            return
+    else:
+        print("Invalid MODE")
+        return
 
     queue = asyncio.Queue()
     for u in usernames:
